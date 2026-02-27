@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golden Hour - Yêu Bé Gia Hân</title>
+    <!-- Import Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Import Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #fcfbf8;
+            --text-main: #2b2a27;
+            --text-muted: #8e8c87;
+            --accent-orange: #d16b47;
+            --chat-bg: #ffffff;
+            --chat-border: #e6e4df;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- MAIN CONTENT --- */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            height: 100%;
+        }
+
+        .center-container {
+            width: 100%;
+            max-width: 720px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0 20px;
+            padding-bottom: 15vh;
+            transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* Khi bắt đầu chat, đẩy input xuống dưới */
+        .center-container.chat-active {
+            justify-content: flex-end;
+            padding-bottom: 30px;
+            padding-top: 20px;
+        }
+
+        /* --- WELCOME SCREEN (Heading) --- */
+        #welcome-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: opacity 0.3s ease;
+        }
+
+        .heading {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+        }
+
+        .heading svg {
+            color: var(--accent-orange);
+            width: 32px;
+            height: 32px;
+        }
+
+        .heading h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 42px;
+            font-weight: 500;
+            color: #433e38;
+            letter-spacing: -0.5px;
+        }
+
+        /* --- CHAT HISTORY --- */
+        #chat-history {
+            width: 100%;
+            flex-grow: 1;
+            overflow-y: auto;
+            display: none; /* Ẩn lúc đầu */
+            flex-direction: column;
+            gap: 24px;
+            margin-bottom: 20px;
+            padding-right: 10px;
+            scroll-behavior: smooth;
+        }
+
+        /* Custom Scrollbar */
+        #chat-history::-webkit-scrollbar { width: 6px; }
+        #chat-history::-webkit-scrollbar-track { background: transparent; }
+        #chat-history::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.1); border-radius: 10px; }
+
+        .message {
+            display: flex;
+            gap: 16px;
+            line-height: 1.6;
+            font-size: 16px;
+        }
+
+        .message.user { justify-content: flex-end; }
+        .message.ai { justify-content: flex-start; }
+
+        .message-content {
+            max-width: 85%;
+            padding: 12px 18px;
+            border-radius: 16px;
+        }
+
+        .message.user .message-content {
+            background-color: #f2efe9;
+            color: var(--text-main);
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.ai .message-content {
+            background-color: transparent;
+            color: var(--text-main);
+            padding: 12px 0;
+        }
+
+        .ai-icon {
+            color: var(--accent-orange);
+            margin-top: 14px;
+            width: 24px;
+            height: 24px;
+        }
+
+        /* --- CHAT INPUT --- */
+        .chat-wrapper {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-box {
+            background-color: var(--chat-bg);
+            border: 1px solid var(--chat-border);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+            display: flex;
+            flex-direction: column;
+            min-height: 120px;
+            transition: box-shadow 0.2s;
+        }
+
+        .chat-box:focus-within {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border-color: #ccc;
+        }
+
+        .chat-box textarea {
+            width: 100%;
+            border: none;
+            outline: none;
+            resize: none;
+            font-size: 16px;
+            color: var(--text-main);
+            background: transparent;
+            flex-grow: 1;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+
+        .chat-box textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        .chat-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .controls-left i {
+            font-size: 20px;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+
+        .controls-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .send-btn {
+            background-color: var(--text-main);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        .send-btn:hover { background-color: black; }
+        .send-btn:active { transform: scale(0.95); }
+        .send-btn i { font-size: 18px; }
+
+    </style>
+</head>
+<body>
+
+    <main class="main-content">
+        <div class="center-container" id="main-container">
+            
+            <!-- Welcome Screen -->
+            <div id="welcome-screen">
+                <div class="heading">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2v20M17 5l-10 14M22 12H2M19 17L5 7M19 7l-14 10M17 19L7 5"/>
+                    </svg>
+                    <h1>Yêu Bé Gia Hân</h1>
+                </div>
+            </div>
+
+            <!-- Chat History -->
+            <div id="chat-history">
+                <!-- Tin nhắn sẽ xuất hiện ở đây -->
+            </div>
+
+            <!-- Chat Area -->
+            <div class="chat-wrapper">
+                <div class="chat-box">
+                    <textarea id="user-input" placeholder="How can I help you today?" rows="2"></textarea>
+                    <div class="chat-controls">
+                        <div class="controls-left">
+                            <i class="ph ph-plus"></i>
+                        </div>
+                        <div class="controls-right">
+                            <!-- Nút Send -->
+                            <div class="send-btn" id="send-btn">
+                                <i class="ph ph-arrow-up"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- JavaScript xử lý Logic và API -->
+    <script>
+        // Sử dụng API Gemini 2.5 theo yêu cầu
+        const GEMINI_API_KEY = "AIzaSyCifa753nQ5QQxcK1upghnnWyCT0DXnNB4"; 
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const chatHistory = document.getElementById('chat-history');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        const mainContainer = document.getElementById('main-container');
+
+        let isFirstMessage = true;
+
+        // Xử lý khi nhấn nút Gửi
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            // Chuyển đổi giao diện khi nhắn tin lần đầu
+            if (isFirstMessage) {
+                welcomeScreen.style.display = 'none';
+                chatHistory.style.display = 'flex';
+                mainContainer.classList.add('chat-active');
+                isFirstMessage = false;
+            }
+
+            // Hiển thị tin nhắn User
+            appendMessage('user', text);
+            userInput.value = '';
+            
+            // Hiển thị trạng thái AI đang nghĩ (rặn câu trả lời ^^)
+            const loadingId = Date.now().toString();
+            appendMessage('ai', '<span style="color:#8e8c87">Thinking...</span>', loadingId);
+
+            // Gọi API Gemini 2.5
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: text }] }]
+                    })
+                });
+
+                if (!response.ok) throw new Error("Lỗi API");
+
+                const data = await response.json();
+                let aiText = data.candidates[0].content.parts[0].text;
+                
+                // Format lại \n thành <br> để xuống dòng
+                aiText = aiText.replace(/\n/g, '<br>');
+
+                // Cập nhật câu trả lời của AI
+                updateAIMessage(loadingId, aiText);
+
+            } catch (error) {
+                updateAIMessage(loadingId, '<span style="color:red">Lỗi: Vui lòng kiểm tra lại API Key hoặc mạng của bạn.</span>');
+            }
+        }
+
+        // Thêm tin nhắn vào giao diện
+        function appendMessage(sender, text, id = '') {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${sender}`;
+            if (id) msgDiv.id = `msg-${id}`;
+
+            if (sender === 'ai') {
+                msgDiv.innerHTML = `
+                    <svg class="ai-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2v20M17 5l-10 14M22 12H2M19 17L5 7M19 7l-14 10M17 19L7 5"/>
+                    </svg>
+                    <div class="message-content">${text}</div>
+                `;
+            } else {
+                msgDiv.innerHTML = `<div class="message-content">${text.replace(/\n/g, '<br>')}</div>`;
+            }
+
+            chatHistory.appendChild(msgDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight; // Tự động cuộn xuống dưới
+        }
+
+        // Cập nhật tin nhắn
+        function updateAIMessage(id, text) {
+            const msgDiv = document.getElementById(`msg-${id}`);
+            if (msgDiv) {
+                msgDiv.querySelector('.message-content').innerHTML = text;
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            }
+        }
+
+        // Bắt sự kiện Click nút Send
+        sendBtn.addEventListener('click', sendMessage);
+
+        // Bắt sự kiện nhấn phím Enter (nhấn Shift+Enter để xuống dòng)
+        userInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    </script>
+
+</body>
+</html>
