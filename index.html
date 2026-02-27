@@ -8,6 +8,8 @@
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <!-- Import Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500&display=swap" rel="stylesheet">
+    <!-- Import Thư viện Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <style>
         :root {
@@ -17,6 +19,7 @@
             --accent-orange: #d16b47;
             --chat-bg: #ffffff;
             --chat-border: #e6e4df;
+            --code-bg: #1e1e1e;
         }
 
         * {
@@ -57,14 +60,13 @@
             transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
         }
 
-        /* Khi bắt đầu chat, đẩy input xuống dưới */
         .center-container.chat-active {
             justify-content: flex-end;
             padding-bottom: 30px;
             padding-top: 20px;
         }
 
-        /* --- WELCOME SCREEN (Heading) --- */
+        /* --- WELCOME SCREEN --- */
         #welcome-screen {
             display: flex;
             flex-direction: column;
@@ -98,7 +100,7 @@
             width: 100%;
             flex-grow: 1;
             overflow-y: auto;
-            display: none; /* Ẩn lúc đầu */
+            display: none;
             flex-direction: column;
             gap: 24px;
             margin-bottom: 20px;
@@ -106,7 +108,6 @@
             scroll-behavior: smooth;
         }
 
-        /* Custom Scrollbar */
         #chat-history::-webkit-scrollbar { width: 6px; }
         #chat-history::-webkit-scrollbar-track { background: transparent; }
         #chat-history::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,0.1); border-radius: 10px; }
@@ -137,6 +138,7 @@
             background-color: transparent;
             color: var(--text-main);
             padding: 12px 0;
+            width: 100%;
         }
 
         .ai-icon {
@@ -144,6 +146,42 @@
             margin-top: 14px;
             width: 24px;
             height: 24px;
+            flex-shrink: 0;
+        }
+
+        /* --- MARKDOWN STYLING (Claude-like) --- */
+        .message.ai .message-content p { margin-bottom: 12px; }
+        .message.ai .message-content p:last-child { margin-bottom: 0; }
+        .message.ai .message-content strong { font-weight: 600; }
+        .message.ai .message-content ul, .message.ai .message-content ol { margin-left: 20px; margin-bottom: 12px; }
+        .message.ai .message-content li { margin-bottom: 4px; }
+        
+        /* Inline code */
+        .message.ai .message-content code {
+            background-color: #f0eee8;
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.9em;
+            color: #d16b47;
+        }
+
+        /* Block code */
+        .message.ai .message-content pre {
+            background-color: var(--code-bg);
+            color: #d4d4d4;
+            padding: 16px;
+            border-radius: 12px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+        
+        .message.ai .message-content pre code {
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+            color: inherit;
+            font-size: 0.9em;
         }
 
         /* --- CHAT INPUT --- */
@@ -183,9 +221,8 @@
             line-height: 1.5;
         }
 
-        .chat-box textarea::placeholder {
-            color: var(--text-muted);
-        }
+        .chat-box textarea::placeholder { color: var(--text-muted); }
+        .chat-box textarea:disabled { opacity: 0.5; }
 
         .chat-controls {
             display: flex;
@@ -215,12 +252,27 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: transform 0.1s, background-color 0.2s;
+            transition: transform 0.1s, background-color 0.2s, opacity 0.2s;
         }
 
         .send-btn:hover { background-color: black; }
         .send-btn:active { transform: scale(0.95); }
+        .send-btn.disabled { opacity: 0.5; cursor: not-allowed; background-color: var(--text-muted); }
         .send-btn i { font-size: 18px; }
+
+        /* Animation con trỏ nhấp nháy lúc AI đang type */
+        .blinking-cursor::after {
+            content: '▋';
+            display: inline-block;
+            animation: blink 1s step-end infinite;
+            color: var(--accent-orange);
+            margin-left: 4px;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
 
     </style>
 </head>
@@ -240,9 +292,7 @@
             </div>
 
             <!-- Chat History -->
-            <div id="chat-history">
-                <!-- Tin nhắn sẽ xuất hiện ở đây -->
-            </div>
+            <div id="chat-history"></div>
 
             <!-- Chat Area -->
             <div class="chat-wrapper">
@@ -253,7 +303,6 @@
                             <i class="ph ph-plus"></i>
                         </div>
                         <div class="controls-right">
-                            <!-- Nút Send -->
                             <div class="send-btn" id="send-btn">
                                 <i class="ph ph-arrow-up"></i>
                             </div>
@@ -264,11 +313,13 @@
         </div>
     </main>
 
-    <!-- JavaScript xử lý Logic và API -->
     <script>
-        // Sử dụng API Gemini 2.5 theo yêu cầu
+        // Cấu hình thư viện Marked.js để ngắt dòng đúng chuẩn
+        marked.setOptions({ breaks: true });
+
+        // API Gemini 2.5 Flash với tham số Streaming (alt=sse)
         const GEMINI_API_KEY = "AIzaSyCifa753nQ5QQxcK1upghnnWyCT0DXnNB4"; 
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`;
 
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
@@ -277,13 +328,13 @@
         const mainContainer = document.getElementById('main-container');
 
         let isFirstMessage = true;
+        let isGenerating = false;
 
-        // Xử lý khi nhấn nút Gửi
         async function sendMessage() {
             const text = userInput.value.trim();
-            if (!text) return;
+            if (!text || isGenerating) return;
 
-            // Chuyển đổi giao diện khi nhắn tin lần đầu
+            // Chuyển UI
             if (isFirstMessage) {
                 welcomeScreen.style.display = 'none';
                 chatHistory.style.display = 'flex';
@@ -291,16 +342,21 @@
                 isFirstMessage = false;
             }
 
-            // Hiển thị tin nhắn User
-            appendMessage('user', text);
+            // Khóa Input
+            isGenerating = true;
             userInput.value = '';
-            
-            // Hiển thị trạng thái AI đang nghĩ (rặn câu trả lời ^^)
-            const loadingId = Date.now().toString();
-            appendMessage('ai', '<span style="color:#8e8c87">Thinking...</span>', loadingId);
+            userInput.disabled = true;
+            sendBtn.classList.add('disabled');
 
-            // Gọi API Gemini 2.5
+            // In tin nhắn User
+            appendMessage('user', text);
+            
+            // Tạo chỗ trống chờ AI
+            const loadingId = Date.now().toString();
+            appendMessage('ai', '<span class="blinking-cursor"></span>', loadingId);
+
             try {
+                // Fetch với Stream
                 const response = await fetch(API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -309,24 +365,62 @@
                     })
                 });
 
-                if (!response.ok) throw new Error("Lỗi API");
+                if (!response.ok) throw new Error("API Error");
 
-                const data = await response.json();
-                let aiText = data.candidates[0].content.parts[0].text;
-                
-                // Format lại \n thành <br> để xuống dòng
-                aiText = aiText.replace(/\n/g, '<br>');
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                let done = false;
+                let fullAiText = "";
+                let buffer = ""; // Bộ đệm dùng để hứng data
 
-                // Cập nhật câu trả lời của AI
-                updateAIMessage(loadingId, aiText);
+                // Vòng lặp đọc Stream
+                while (!done) {
+                    const { value, done: readerDone } = await reader.read();
+                    done = readerDone;
+                    
+                    if (value) {
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); // Giữ lại phần chưa hoàn chỉnh vào buffer
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                if (line.includes('[DONE]')) continue;
+
+                                try {
+                                    const dataStr = line.slice(6);
+                                    const data = JSON.parse(dataStr);
+                                    
+                                    if (data.candidates && data.candidates[0].content.parts[0].text) {
+                                        fullAiText += data.candidates[0].content.parts[0].text;
+                                        
+                                        // Dịch Markdown sang HTML và hiển thị
+                                        const htmlContent = marked.parse(fullAiText) + '<span class="blinking-cursor"></span>';
+                                        updateAIMessage(loadingId, htmlContent);
+                                    }
+                                } catch (e) {
+                                    console.error("Parse error:", e);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Xóa con trỏ nhấp nháy khi hoàn thành
+                updateAIMessage(loadingId, marked.parse(fullAiText));
 
             } catch (error) {
-                updateAIMessage(loadingId, '<span style="color:red">Lỗi: Vui lòng kiểm tra lại API Key hoặc mạng của bạn.</span>');
+                updateAIMessage(loadingId, '<span style="color:red">Lỗi: Vui lòng kiểm tra API Key.</span>');
+            } finally {
+                // Mở khóa Input
+                isGenerating = false;
+                userInput.disabled = false;
+                sendBtn.classList.remove('disabled');
+                userInput.focus();
             }
         }
 
-        // Thêm tin nhắn vào giao diện
-        function appendMessage(sender, text, id = '') {
+        function appendMessage(sender, htmlContent, id = '') {
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${sender}`;
             if (id) msgDiv.id = `msg-${id}`;
@@ -336,29 +430,28 @@
                     <svg class="ai-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 2v20M17 5l-10 14M22 12H2M19 17L5 7M19 7l-14 10M17 19L7 5"/>
                     </svg>
-                    <div class="message-content">${text}</div>
+                    <div class="message-content">${htmlContent}</div>
                 `;
             } else {
-                msgDiv.innerHTML = `<div class="message-content">${text.replace(/\n/g, '<br>')}</div>`;
+                // User message (không dùng Markdown cho user)
+                msgDiv.innerHTML = `<div class="message-content">${htmlContent.replace(/\n/g, '<br>')}</div>`;
             }
 
             chatHistory.appendChild(msgDiv);
-            chatHistory.scrollTop = chatHistory.scrollHeight; // Tự động cuộn xuống dưới
+            chatHistory.scrollTop = chatHistory.scrollHeight;
         }
 
-        // Cập nhật tin nhắn
-        function updateAIMessage(id, text) {
+        function updateAIMessage(id, htmlContent) {
             const msgDiv = document.getElementById(`msg-${id}`);
             if (msgDiv) {
-                msgDiv.querySelector('.message-content').innerHTML = text;
-                chatHistory.scrollTop = chatHistory.scrollHeight;
+                msgDiv.querySelector('.message-content').innerHTML = htmlContent;
+                // Auto scroll xuống khi có chữ mới
+                chatHistory.scrollTop = chatHistory.scrollHeight; 
             }
         }
 
-        // Bắt sự kiện Click nút Send
         sendBtn.addEventListener('click', sendMessage);
 
-        // Bắt sự kiện nhấn phím Enter (nhấn Shift+Enter để xuống dòng)
         userInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
